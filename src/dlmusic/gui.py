@@ -106,10 +106,12 @@ class DummyConsole:
     def print(self, *args, **kwargs): pass
 
 class MockProgress:
-    def __init__(self, callback, progress_callback):
+    def __init__(self, callback, progress_callback, started_callback):
         self.callback = callback
         self.progress_callback = progress_callback
+        self.started_callback = started_callback
         self.console = DummyConsole()
+        self._started_queries = set()
         
     def add_task(self, description, **kwargs):
         clean = str(description).replace("[cyan]", "").replace("[/cyan]", "").replace("...", "")
@@ -118,7 +120,11 @@ class MockProgress:
         
     def update(self, *args, **kwargs):
         if "completed" in kwargs and "query" in kwargs:
-            self.progress_callback(kwargs["query"], float(kwargs["completed"]))
+            q = kwargs["query"]
+            if q not in self._started_queries:
+                self._started_queries.add(q)
+                self.started_callback(q)
+            self.progress_callback(q, float(kwargs["completed"]))
 
     def remove_task(self, *args, **kwargs): pass
     def advance(self, *args, **kwargs): pass
@@ -170,14 +176,13 @@ class DownloaderThread(QThread):
                 return
                 
             self.log.emit(f"Igniting Engine ({self.threads} Threads) for {total} tracks...")
-            mock_prog = MockProgress(self.log.emit, self.track_progress.emit)
+            mock_prog = MockProgress(self.log.emit, self.track_progress.emit, self.track_started.emit)
             completed = 0
             
             # Map futures back to their item query for tracking
             future_to_query = {}
             with ThreadPoolExecutor(max_workers=self.threads) as pool:
                 for i, item in enumerate(to_download):
-                    self.track_started.emit(item["query"])
                     f = pool.submit(download_one, item, self.outdir, i+1, False, mock_prog, 1, self.audio_format)
                     future_to_query[f] = item["query"]
                     
@@ -315,12 +320,12 @@ class TrackWidget(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
         if self._state == "downloading":
-            fill_width = max(int(self.width() * (self._percent / 100.0)), int(self.width() * 0.08))
-            opacity = int(self._pulse_opacity * 255) if self._percent == 0 else 60
-            gradient = QLinearGradient(0, 0, fill_width, 0)
-            gradient.setColorAt(0.0, QColor(245, 158, 11, opacity))
-            gradient.setColorAt(1.0, QColor(245, 158, 11, max(opacity - 30, 10)))
-            painter.setBrush(gradient)
+            if self._percent > 0:
+                fill_width = int(self.width() * (self._percent / 100.0))
+            else:
+                fill_width = self.width()
+            opacity = int(self._pulse_opacity * 180) if self._percent == 0 else 45
+            painter.setBrush(QColor(245, 158, 11, opacity))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(0, 0, fill_width, self.height(), 6, 6)
         elif self._state == "done":
