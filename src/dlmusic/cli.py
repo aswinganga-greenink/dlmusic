@@ -18,6 +18,39 @@ from dlmusic.config import state, banner, err, info, pr, step, DIM, R, BLU, CYN,
 from dlmusic.extractors import detect, collect
 from dlmusic.downloader import download_one
 
+def run_wizard():
+    """I built this interactive wizard to make it ultra-easy to use without remembering CLI flags."""
+    from rich.prompt import Prompt, Confirm
+    from rich.panel import Panel
+
+    _console.print()
+    _console.print(Panel.fit("[bold magenta]🎵 dlmusic Interactive Wizard 🎵[/bold magenta]", border_style="cyan"))
+    _console.print()
+    
+    url = Prompt.ask("[cyan]  ℹ  Enter a YouTube/Spotify URL or .txt file[/cyan]")
+    outdir = Prompt.ask("[cyan]  ℹ  Output folder[/cyan]", default="./downloads")
+    
+    # Simple validation loop for threads
+    while True:
+        try:
+            threads = int(Prompt.ask("[cyan]  ℹ  Number of parallel threads[/cyan]", default="4"))
+            break
+        except ValueError:
+            _console.print("[red]Please enter a valid number.[/red]")
+            
+    fmt = Prompt.ask("[cyan]  ℹ  Audio format[/cyan]", choices=["mp3", "flac", "m4a", "wav"], default="mp3")
+    interactive = Confirm.ask("[cyan]  ℹ  Interactively select tracks to skip?[/cyan]", default=False)
+    _console.print()
+    
+    return argparse.Namespace(
+        input=url,
+        outdir=outdir,
+        threads=threads,
+        format=fmt,
+        interactive=interactive,
+        ejs=False
+    )
+
 def main():
     """This is my primary entrypoint. It ties everything together."""
     parser = argparse.ArgumentParser(
@@ -37,7 +70,12 @@ Examples:
     parser.add_argument("--ejs",           action="store_true",   help="Enable remote EJS challenge solver (downloads from GitHub)")
     parser.add_argument("--interactive", "-i", action="store_true", help="Interactively select tracks to skip")
     parser.add_argument("--format", "-f",  choices=["mp3", "flac", "m4a", "wav"], default="mp3", help="Audio format (default: mp3)")
-    args = parser.parse_args()
+    
+    # If the user just types `dlmusic` with no arguments, I drop them into my beautiful UI wizard!
+    if len(sys.argv) == 1:
+        args = run_wizard()
+    else:
+        args = parser.parse_args()
 
     banner()
 
