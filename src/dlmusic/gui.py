@@ -11,7 +11,7 @@ def get_stylesheet(is_dark=True):
     if is_dark:
         bg = "transparent"
         central = "#050506"
-        border = "rgba(255, 255, 255, 0.06)"
+        border = "rgba(255, 255, 255, 0.08)"
         card_bg = "rgba(255, 255, 255, 0.02)"
         text = "#F0F0F5"
         text_muted = "#8A8F98"
@@ -21,6 +21,7 @@ def get_stylesheet(is_dark=True):
         btn_hover = "#6F7AE0"
         btn_pressed = "#4651B5"
         selection_bg = "rgba(94, 106, 210, 0.15)"
+        text_selection = "#3A3A4A"
     else:
         bg = "transparent"
         central = "#F7F7F9"
@@ -34,6 +35,7 @@ def get_stylesheet(is_dark=True):
         btn_hover = "#6F7AE0"
         btn_pressed = "#4651B5"
         selection_bg = "rgba(94, 106, 210, 0.1)"
+        text_selection = "#E0E0E5"
         
     return f"""
 QMainWindow {{ background-color: {bg}; }}
@@ -48,7 +50,7 @@ QLabel#subtitleLabel {{ color: {text_muted}; font-size: 15px; margin-bottom: 15p
 QLabel {{ color: {text}; }}
 
 /* Text Inputs */
-QLineEdit#urlInput {{ background-color: {input_bg}; border: 1px solid {border}; border-radius: 10px; color: {text}; padding: 12px 18px; font-size: 14px; selection-background-color: {accent}; }}
+QLineEdit#urlInput {{ background-color: {input_bg}; border: 1px solid {border}; border-radius: 10px; color: {text}; padding: 12px 18px; font-size: 14px; selection-background-color: {text_selection}; }}
 QLineEdit#urlInput:focus {{ border: 1px solid {accent}; background-color: {input_focus}; }}
 
 /* Buttons */
