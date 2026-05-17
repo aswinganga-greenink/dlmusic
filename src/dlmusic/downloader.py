@@ -101,7 +101,7 @@ def download_one(item: dict, outdir: str, idx: int, ejs: bool, progress, overall
         import re
         for line in process.stdout:
             if "[download]" in line and "%" in line:
-                match = re.search(r"(\d+\.\d+)%", line)
+                match = re.search(r"(\d+(?:\.\d+)?)%", line)
                 if match:
                     progress.update(task_id, completed=float(match.group(1)), query=url)
             elif outdir in line:
@@ -125,10 +125,9 @@ def download_one(item: dict, outdir: str, idx: int, ejs: bool, progress, overall
             
             return True, title
         else:
-            emsg = result.stderr.strip().splitlines()[-1][:80] if result.stderr.strip() else "unknown error"
             with lock:
                 state["failed"] += 1
-            progress.console.print(f"[red]✘[/red] {title[:50]} — [dim]{emsg}[/dim]")
+            progress.console.print(f"[red]✘[/red] {title[:50]} — download failed")
             progress.remove_task(task_id)
             progress.advance(overall_task)
             return False, title

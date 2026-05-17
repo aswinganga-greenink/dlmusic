@@ -225,32 +225,51 @@ class CardWidget(QWidget):
         self.layout.setContentsMargins(20, 20, 20, 20)
 
 class TrackWidget(QWidget):
-    def __init__(self, title):
+    def __init__(self, title, is_dark=True):
         super().__init__()
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 100)
-        self.progress.setValue(0)
-        self.progress.setFormat(title)
-        self.progress.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        self.progress.setFixedHeight(35)
-        self.progress.setStyleSheet("""
-            QProgressBar {
-                background-color: transparent;
-                border: none;
-                color: #EDEDEF;
-                text-align: left;
-                padding-left: 5px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            QProgressBar::chunk {
-                background-color: rgba(46, 204, 113, 0.35);
-                border-radius: 6px;
-            }
-        """)
-        layout.addWidget(self.progress)
+        self.setMinimumHeight(40)
+        self.title = title
+        self._percent = 0
+        self._is_dark = is_dark
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 6, 12, 6)
+        
+        self.label = QLabel(title)
+        self.label.setStyleSheet("font-size: 13px; font-weight: 600; background: transparent;")
+        layout.addWidget(self.label)
+        
+        self.pct_label = QLabel("")
+        self.pct_label.setStyleSheet("font-size: 11px; color: #8A8F98; background: transparent;")
+        self.pct_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.pct_label.setFixedWidth(45)
+        layout.addWidget(self.pct_label)
+    
+    def set_progress(self, percent):
+        self._percent = min(int(percent), 100)
+        if self._percent > 0:
+            self.pct_label.setText(f"{self._percent}%")
+        if self._percent >= 100:
+            self.pct_label.setText("✔")
+            self.pct_label.setStyleSheet("font-size: 14px; color: #2ECC71; background: transparent;")
+        self.update()
+        
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QLinearGradient
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        if self._percent > 0:
+            fill_width = int(self.width() * (self._percent / 100.0))
+            gradient = QLinearGradient(0, 0, fill_width, 0)
+            gradient.setColorAt(0.0, QColor(46, 204, 113, 60))
+            gradient.setColorAt(1.0, QColor(46, 204, 113, 30))
+            painter.setBrush(gradient)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(0, 0, fill_width, self.height(), 6, 6)
+        
+        painter.end()
+        super().paintEvent(event)
 
 class DLMusicApp(QMainWindow):
     def __init__(self):
@@ -491,7 +510,7 @@ class DLMusicApp(QMainWindow):
 
     def update_track_progress(self, query, percent):
         if query in self.track_widgets:
-            self.track_widgets[query].progress.setValue(int(percent))
+            self.track_widgets[query].set_progress(percent)
 
     def update_progress(self, completed, total):
         self.progress_bar.setValue(int((completed / total) * 100))
