@@ -104,7 +104,7 @@ Examples:
         pr()
         pr(f"{BLU}{BOLD}  ➜  Interactive Track Selection{R}")
         for idx, item in enumerate(items, 1):
-            pr(f"      {DIM}{idx:>3}.{R} {item}")
+            pr(f"      {DIM}{idx:>3}.{R} {item['query']}")
         pr()
         try:
             ans = input(f"{CYN}  ℹ  Enter track numbers to skip (e.g., 1, 4-7) or press Enter to download all: {R}").strip()
@@ -138,8 +138,8 @@ Examples:
     
     step("Scanning output folder for existing tracks…")
     to_download, already_have = [], []
-    for q in items:
-        (already_have if is_present(q, outdir) else to_download).append(q)
+    for item in items:
+        (already_have if is_present(item["query"], outdir) else to_download).append(item)
 
     state["skipped"] = len(already_have)
     state["total"] = len(to_download)

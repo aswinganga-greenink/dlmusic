@@ -2,7 +2,7 @@ import re
 import sys
 import subprocess
 from pathlib import Path
-from typing import List
+from typing import List, Dict
 from dlmusic.config import err, step, warn
 
 # I pre-compile my regex patterns here so they run as fast as possible during detection
@@ -18,7 +18,7 @@ def detect(inp: str) -> str:
     if _re_yt.search(inp):       return "yt_single"
     return "query"
 
-def spotify_to_queries(url: str) -> List[str]:
+def spotify_to_queries(url: str) -> List[Dict[str, str]]:
     """
     I use the spotapi library here because it lets me fetch public Spotify data 
     without needing OAuth credentials. Super convenient.
@@ -52,7 +52,19 @@ def spotify_to_queries(url: str) -> List[str]:
                     artists = track.get("artists", {}).get("items", [])
                     artist  = artists[0]["profile"]["name"] if artists else ""
                     if name:
-                        queries.append(f"{artist} - {name}" if artist else name)
+                        query = f"{artist} - {name}" if artist else name
+                        
+                        cover_url = ""
+                        try:
+                            # Attempt to get highest resolution cover art (usually 640x640)
+                            sources = track.get("albumOfTrack", {}).get("coverArt", {}).get("sources", [])
+                            if sources:
+                                sources.sort(key=lambda s: s.get("width", 0), reverse=True)
+                                cover_url = sources[0]["url"]
+                        except Exception:
+                            pass
+                            
+                        queries.append({"query": query, "cover": cover_url})
             return queries
 
         elif kind == "album":
@@ -65,7 +77,21 @@ def spotify_to_queries(url: str) -> List[str]:
                 artists = track.get("artists", {}).get("items", [])
                 artist  = artists[0]["profile"]["name"] if artists else ""
                 if name:
-                    queries.append(f"{artist} - {name}" if artist else name)
+                    query = f"{artist} - {name}" if artist else name
+                    
+                    cover_url = ""
+                    try:
+                        sources = track.get("album", {}).get("coverArt", {}).get("sources", [])
+                        if not sources:
+                            # Fallback to main album cover
+                            sources = item.get("coverArt", {}).get("sources", [])
+                        if sources:
+                            sources.sort(key=lambda s: s.get("width", 0), reverse=True)
+                            cover_url = sources[0]["url"]
+                    except Exception:
+                        pass
+                        
+                    queries.append({"query": query, "cover": cover_url})
             return queries
 
         elif kind == "track":
@@ -73,7 +99,18 @@ def spotify_to_queries(url: str) -> List[str]:
             name    = data.get("name", "")
             artists = data.get("artists", {}).get("items", [])
             artist  = artists[0]["profile"]["name"] if artists else ""
-            return [f"{artist} - {name}" if artist else name]
+            query = f"{artist} - {name}" if artist else name
+            
+            cover_url = ""
+            try:
+                sources = data.get("albumOfTrack", {}).get("coverArt", {}).get("sources", [])
+                if sources:
+                    sources.sort(key=lambda s: s.get("width", 0), reverse=True)
+                    cover_url = sources[0]["url"]
+            except Exception:
+                pass
+                
+            return [{"query": query, "cover": cover_url}]
 
     except Exception as e:
         err(f"Spotify fetch failed: {type(e).__name__}: {e}")
@@ -81,11 +118,11 @@ def spotify_to_queries(url: str) -> List[str]:
 
     return []
 
-def collect(inp: str, kind: str) -> List[str]:
+def collect(inp: str, kind: str) -> List[Dict[str, str]]:
     """I gather all the URLs or search queries before I hand them to the threads."""
     if kind == "txt":
         lines = Path(inp).read_text().splitlines()
-        return [l.strip() for l in lines if l.strip() and not l.startswith("#")]
+        return [{"query": l.strip()} for l in lines if l.strip() and not l.startswith("#")]
 
     if kind == "spotify":
         return spotify_to_queries(inp)
@@ -99,9 +136,9 @@ def collect(inp: str, kind: str) -> List[str]:
                 stderr=subprocess.DEVNULL, timeout=90, text=True
             )
             urls = [u.strip() for u in out.splitlines() if u.strip()]
-            return urls if urls else [inp]
+            return [{"query": u} for u in urls] if urls else [{"query": inp}]
         except Exception as e:
             warn(f"Playlist extract failed ({e}), treating as single URL.")
-            return [inp]
+            return [{"query": inp}]
 
-    return [inp]  # I default to returning it as a single URL or bare query string
+    return [{"query": inp}]  # I default to returning it as a single URL or bare query string
