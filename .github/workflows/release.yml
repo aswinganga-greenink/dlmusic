@@ -10,7 +10,20 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            build_name: dlmusic-linux-amd64
+            file_name: dlmusic-linux-amd64
+          - os: macos-latest
+            build_name: dlmusic-macos-amd64
+            file_name: dlmusic-macos-amd64
+          - os: windows-latest
+            build_name: dlmusic-windows-amd64
+            file_name: dlmusic-windows-amd64.exe
+
     steps:
     - uses: actions/checkout@v4
 
@@ -26,12 +39,10 @@ jobs:
         pip install .
 
     - name: Build standalone binary
-      run: |
-        # We use PyInstaller to compile dlmusic into a single executable binary
-        pyinstaller --onefile --name dlmusic-linux-amd64 src/dlmusic/__main__.py
+      run: pyinstaller --onefile --name ${{ matrix.build_name }} src/dlmusic/__main__.py
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        files: dist/dlmusic-linux-amd64
+        files: dist/${{ matrix.file_name }}
         generate_release_notes: true
