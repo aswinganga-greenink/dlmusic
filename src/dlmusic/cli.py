@@ -71,9 +71,10 @@ Examples:
     parser.add_argument("--interactive", "-i", action="store_true", help="Interactively select tracks to skip")
     parser.add_argument("--format", "-f",  choices=["mp3", "flac", "m4a", "wav"], default="mp3", help="Audio format (default: mp3)")
     
-    # If the user just types `dlmusic` with no arguments, I drop them into my beautiful UI wizard!
     if len(sys.argv) == 1:
-        args = run_wizard()
+        from dlmusic.gui import run_gui
+        run_gui()
+        sys.exit(0)
     else:
         args = parser.parse_args()
 

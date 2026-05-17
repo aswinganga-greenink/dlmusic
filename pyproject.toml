@@ -13,7 +13,9 @@ dependencies = [
     "rich",
     "yt-dlp",
     "mutagen",
-    "syncedlyrics"
+    "syncedlyrics",
+    "PyQt6",
+    "pytest-qt"
 ]
 
 [project.scripts]
