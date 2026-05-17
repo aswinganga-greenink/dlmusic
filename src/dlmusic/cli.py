@@ -133,9 +133,28 @@ Examples:
                 ok("All tracks skipped. Exiting.")
                 sys.exit(0)
 
-    state["total"] = len(items)
+    # ── Smart Resume Pre-Scan ──
+    from dlmusic.dedup import is_present
+    
+    step("Scanning output folder for existing tracks…")
+    to_download, already_have = [], []
+    for q in items:
+        (already_have if is_present(q, outdir) else to_download).append(q)
+
+    state["skipped"] = len(already_have)
+    state["total"] = len(to_download)
+    
+    if state["skipped"]:
+        info(f"Already present : {GRN}{state['skipped']}{R} tracks — skipping")
+        
     info(f"Tracks to download  : {CYN}{state['total']}{R}")
     pr()
+    
+    if not to_download:
+        ok("Nothing new to download — all tracks already present!")
+        pr()
+        sys.exit(0)
+        
     step(f"Starting parallel download with {args.threads} threads…")
     pr()
 
@@ -159,7 +178,7 @@ Examples:
         with ThreadPoolExecutor(max_workers=args.threads) as pool:
             futures = {
                 pool.submit(download_one, item, outdir, idx + 1, args.ejs, progress, overall_task, args.format): idx
-                for idx, item in enumerate(items)
+                for idx, item in enumerate(to_download)
             }
             for f in as_completed(futures):
                 idx = futures[f]
@@ -189,6 +208,7 @@ Examples:
     pr(f"{MAG}{BOLD}  ║           Download Summary            ║{R}")
     pr(f"{MAG}{BOLD}  ╚═══════════════════════════════════════╝{R}")
     pr(f"    {GRN}✔  Done    : {state['done']}{R}")
+    pr(f"    {YEL}⏭  Skipped : {state['skipped']} (already present){R}")
     pr(f"    {RED}✘  Failed  : {state['failed']}{R}")
     pr(f"    {CYN}⏱  Time    : {elapsed:.1f}s{R}")
     pr(f"    {WHT}📁  Saved to: {outdir}{R}")

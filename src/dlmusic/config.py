@@ -18,6 +18,7 @@ lock = threading.Lock()
 state = {
     "done": 0,
     "failed": 0,
+    "skipped": 0,
     "total": 0
 }
 

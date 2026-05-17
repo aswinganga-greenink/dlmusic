@@ -49,6 +49,10 @@ def download_one(url: str, outdir: str, idx: int, ejs: bool, progress, overall_t
             progress.console.print(f"[green]✔[/green] [white]{title[:65]}[/white]")
             progress.remove_task(task_id)
             progress.advance(overall_task)
+            
+            from dlmusic.dedup import record_done
+            record_done(url, outdir)
+            
             return True, title
         else:
             emsg = result.stderr.strip().splitlines()[-1][:80] if result.stderr.strip() else "unknown error"
