@@ -1,10 +1,11 @@
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QLabel, QVBoxLayout, 
-    QWidget, QPushButton, QLineEdit, QHBoxLayout, QGraphicsDropShadowEffect
+    QWidget, QPushButton, QLineEdit, QHBoxLayout, QGraphicsDropShadowEffect, QProgressBar
 )
-from PyQt6.QtCore import Qt, QPoint
+from PyQt6.QtCore import Qt, QPoint, QThread, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QCursor
+import os
 
 _STYLESHEET = """
 QMainWindow {
@@ -65,7 +66,78 @@ QPushButton#closeBtn {
 QPushButton#closeBtn:hover {
     color: #EF4444;
 }
+QProgressBar {
+    background-color: #13131A;
+    border-radius: 6px;
+    height: 12px;
+    border: 1px solid #272736;
+}
+QProgressBar::chunk {
+    background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #4F46E5, stop:1 #8B5CF6);
+    border-radius: 5px;
+}
 """
+
+class MockProgress:
+    def add_task(self, *args, **kwargs): return 1
+    def update(self, *args, **kwargs): pass
+    def remove_task(self, *args, **kwargs): pass
+
+class DownloaderThread(QThread):
+    progress = pyqtSignal(int, int)
+    log = pyqtSignal(str)
+    finished_dl = pyqtSignal()
+
+    def __init__(self, url):
+        super().__init__()
+        self.url = url
+        self.outdir = os.path.expanduser("~/Downloads/dlmusic")
+
+    def run(self):
+        try:
+            from dlmusic.extractors import detect, collect
+            from dlmusic.dedup import is_present
+            from dlmusic.downloader import download_one
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            
+            os.makedirs(self.outdir, exist_ok=True)
+            self.log.emit("Detecting URL...")
+            kind = detect(self.url)
+            
+            self.log.emit(f"Fetching metadata for {kind}...")
+            items = collect(self.url, kind)
+            
+            to_download = []
+            for item in items:
+                if not is_present(item["query"], self.outdir):
+                    to_download.append(item)
+            
+            total = len(to_download)
+            if total == 0:
+                self.log.emit("All tracks are already downloaded!")
+                self.finished_dl.emit()
+                return
+                
+            self.log.emit(f"Igniting Engine (4 Threads) for {total} tracks...")
+            mock_prog = MockProgress()
+            
+            completed = 0
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                futures = [
+                    pool.submit(download_one, item, self.outdir, i+1, False, mock_prog, 1, "mp3")
+                    for i, item in enumerate(to_download)
+                ]
+                for f in as_completed(futures):
+                    success, title = f.result()
+                    completed += 1
+                    self.progress.emit(completed, total)
+                    self.log.emit(f"Downloaded: {title[:40]}")
+                    
+            self.log.emit("All downloads complete! Check your Downloads folder.")
+            self.finished_dl.emit()
+        except Exception as e:
+            self.log.emit(f"Error: {e}")
+            self.finished_dl.emit()
 
 class DraggableTitleBar(QWidget):
     def __init__(self, parent):
@@ -148,12 +220,54 @@ class DLMusicApp(QMainWindow):
         self.download_btn = QPushButton("Start Engine")
         self.download_btn.setObjectName("downloadBtn")
         self.download_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.download_btn.clicked.connect(self.start_download)
         self.content_layout.addWidget(self.download_btn)
+        
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setValue(0)
+        self.progress_bar.hide()
+        self.content_layout.addWidget(self.progress_bar)
+        
+        self.status_label = QLabel("")
+        self.status_label.setStyleSheet("color: #8B8B9E; margin-top: 10px; font-size: 13px;")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.content_layout.addWidget(self.status_label)
         
         self.content_layout.addStretch()
         self.main_layout.addLayout(self.content_layout)
         
         self.setStyleSheet(_STYLESHEET)
+
+    def start_download(self):
+        url = self.url_input.text().strip()
+        if not url: return
+        
+        self.download_btn.setEnabled(False)
+        self.download_btn.setText("Engine Running...")
+        self.url_input.setEnabled(False)
+        self.progress_bar.show()
+        self.progress_bar.setValue(0)
+        self.status_label.setText("Initializing backend...")
+        
+        self.worker = DownloaderThread(url)
+        self.worker.progress.connect(self.update_progress)
+        self.worker.log.connect(self.update_status)
+        self.worker.finished_dl.connect(self.download_finished)
+        self.worker.start()
+
+    def update_progress(self, completed, total):
+        pct = int((completed / total) * 100)
+        self.progress_bar.setValue(pct)
+
+    def update_status(self, msg):
+        self.status_label.setText(msg)
+
+    def download_finished(self):
+        self.download_btn.setEnabled(True)
+        self.download_btn.setText("Start Engine")
+        self.url_input.setEnabled(True)
+        self.url_input.clear()
 
 def run_gui():
     app = QApplication(sys.argv)
