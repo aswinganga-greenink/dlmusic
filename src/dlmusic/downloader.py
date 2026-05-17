@@ -61,19 +61,8 @@ def download_one(item: dict, outdir: str, idx: int, ejs: bool, progress, overall
     """
     url = item["query"]
     cover_url = item.get("cover", "")
+    title = item.get("title", url[:55])
     search_url = f"ytsearch1:{url}" if not url.startswith("http") else url
-    label = url[:55]
-
-    # I do a quick, silent pre-flight check to fetch the actual video title for the UI
-    try:
-        raw = subprocess.check_output(
-            ["yt-dlp", "--no-playlist", "--get-title", "--js-runtimes", "node",
-             "--quiet", search_url],
-            stderr=subprocess.DEVNULL, timeout=30, text=True
-        ).strip()
-        title = raw.splitlines()[0] if raw else label
-    except Exception:
-        title = label
 
     # Add a spinner to my rich UI so the user knows this specific thread is working
     task_id = progress.add_task(f"[cyan]{title[:45]}...", start=True, total=None)
@@ -87,7 +76,8 @@ def download_one(item: dict, outdir: str, idx: int, ejs: bool, progress, overall
         "--output", os.path.join(outdir, "%(title)s.%(ext)s"),
         "--print", "after_move:filepath",
         "--newline",
-        "--no-warnings"
+        "--no-warnings",
+        "--concurrent-fragments", "4",
     ]
     
     # I sometimes hit the dreaded 'n-challenge' on YouTube, so I added an EJS solver toggle
