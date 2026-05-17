@@ -7,26 +7,53 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QCursor
 
-_STYLESHEET = """
-QMainWindow { background-color: transparent; }
-QWidget#centralWidget { background-color: #0A0A0F; border-radius: 20px; border: 1px solid #1F1F2E; }
-QLabel#titleLabel { color: #FFFFFF; font-size: 36px; font-weight: 900; margin-top: 10px; letter-spacing: -2px; }
-QLabel#subtitleLabel { color: #8B8B9E; font-size: 14px; margin-bottom: 20px; }
-QLineEdit#urlInput { background-color: #13131A; border: 2px solid #272736; border-radius: 12px; color: #FFFFFF; padding: 12px 18px; font-size: 14px; selection-background-color: #4F46E5; }
-QLineEdit#urlInput:focus { border: 2px solid #4F46E5; background-color: #171721; }
-QPushButton#downloadBtn { background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #4F46E5, stop:1 #7C3AED); color: #FFFFFF; border-radius: 12px; font-size: 16px; font-weight: bold; padding: 14px; margin-top: 10px; }
-QPushButton#downloadBtn:hover { background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #6366F1, stop:1 #8B5CF6); }
-QPushButton#downloadBtn:disabled { background-color: #272736; color: #8B8B9E; }
-QPushButton#fetchBtn, QPushButton#fileBtn { background-color: #1F1F2E; color: #FFFFFF; border-radius: 12px; padding: 12px; font-weight: bold; }
-QPushButton#fetchBtn:hover, QPushButton#fileBtn:hover { background-color: #2D2D44; }
-QPushButton#closeBtn { background-color: transparent; color: #8B8B9E; font-size: 16px; font-weight: bold; border: none; }
-QPushButton#closeBtn:hover { color: #EF4444; }
-QProgressBar { background-color: #13131A; border-radius: 6px; height: 10px; border: 1px solid #272736; }
-QProgressBar::chunk { background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #4F46E5, stop:1 #8B5CF6); border-radius: 5px; }
-QComboBox, QSpinBox { background-color: #13131A; border: 2px solid #272736; border-radius: 8px; color: #FFFFFF; padding: 8px; font-size: 13px; }
-QListWidget { background-color: #13131A; border: 2px solid #272736; border-radius: 10px; color: #FFFFFF; padding: 5px; font-size: 13px; outline: 0; }
-QListWidget::item { padding: 6px; border-bottom: 1px solid #1F1F2E; }
-QListWidget::item:selected { background-color: #3730A3; border-radius: 5px; }
+def get_stylesheet(is_dark=True):
+    if is_dark:
+        bg = "transparent"
+        central = "#050506"
+        border = "rgba(255, 255, 255, 0.08)"
+        text = "#EDEDEF"
+        text_muted = "#8A8F98"
+        input_bg = "#0A0A0C"
+        input_focus = "#0F0F13"
+        accent = "#5E6AD2"
+        btn_hover = "#6F7AE0"
+        btn_pressed = "#4651B5"
+    else:
+        bg = "transparent"
+        central = "#F7F7F9"
+        border = "rgba(0, 0, 0, 0.08)"
+        text = "#1A1A1F"
+        text_muted = "#666677"
+        input_bg = "#FFFFFF"
+        input_focus = "#FFFFFF"
+        accent = "#5E6AD2"
+        btn_hover = "#6F7AE0"
+        btn_pressed = "#4651B5"
+        
+    return f"""
+QMainWindow {{ background-color: {bg}; }}
+QWidget#centralWidget {{ background-color: {central}; border-radius: 20px; border: 1px solid {border}; }}
+QLabel#titleLabel {{ color: {text}; font-size: 38px; font-weight: 900; margin-top: 15px; letter-spacing: -1.5px; }}
+QLabel#subtitleLabel {{ color: {text_muted}; font-size: 15px; margin-bottom: 25px; }}
+QLineEdit#urlInput {{ background-color: {input_bg}; border: 1px solid {border}; border-radius: 12px; color: {text}; padding: 14px 20px; font-size: 15px; selection-background-color: {accent}; }}
+QLineEdit#urlInput:focus {{ border: 1px solid {accent}; background-color: {input_focus}; }}
+QPushButton#downloadBtn {{ background-color: {accent}; color: #FFFFFF; border-radius: 12px; font-size: 16px; font-weight: bold; padding: 15px; margin-top: 15px; }}
+QPushButton#downloadBtn:hover {{ background-color: {btn_hover}; }}
+QPushButton#downloadBtn:pressed {{ background-color: {btn_pressed}; }}
+QPushButton#downloadBtn:disabled {{ background-color: {input_bg}; color: {text_muted}; border: 1px solid {border}; }}
+QPushButton#fetchBtn, QPushButton#fileBtn {{ background-color: {input_bg}; color: {text}; border: 1px solid {border}; border-radius: 12px; padding: 12px; font-weight: bold; font-size: 14px; }}
+QPushButton#fetchBtn:hover, QPushButton#fileBtn:hover {{ background-color: {input_focus}; border: 1px solid {accent}; }}
+QPushButton#closeBtn, QPushButton#themeBtn {{ background-color: transparent; color: {text_muted}; font-size: 18px; font-weight: bold; border: none; }}
+QPushButton#closeBtn:hover {{ color: #EF4444; }}
+QPushButton#themeBtn:hover {{ color: {accent}; }}
+QProgressBar {{ background-color: {input_bg}; border-radius: 6px; height: 10px; border: 1px solid {border}; }}
+QProgressBar::chunk {{ background-color: {accent}; border-radius: 5px; }}
+QComboBox, QSpinBox {{ background-color: {input_bg}; border: 1px solid {border}; border-radius: 10px; color: {text}; padding: 10px; font-size: 14px; }}
+QListWidget {{ background-color: {input_bg}; border: 1px solid {border}; border-radius: 12px; color: {text}; padding: 8px; font-size: 14px; outline: 0; }}
+QListWidget::item {{ padding: 10px; border-bottom: 1px solid {border}; border-radius: 6px; }}
+QListWidget::item:selected {{ background-color: rgba(94, 106, 210, 0.15); border: 1px solid {accent}; color: {accent}; }}
+QLabel {{ color: {text}; }}
 """
 
 class MockProgress:
@@ -112,14 +139,23 @@ class DraggableTitleBar(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(10, 10, 20, 0)
+        self.layout.setContentsMargins(15, 15, 25, 0)
         self.layout.addStretch()
+        
+        self.theme_btn = QPushButton("◑")
+        self.theme_btn.setObjectName("themeBtn")
+        self.theme_btn.setFixedSize(30, 30)
+        self.theme_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.theme_btn.clicked.connect(self.parent.toggle_theme)
+        self.layout.addWidget(self.theme_btn)
+        
         self.close_btn = QPushButton("✕")
         self.close_btn.setObjectName("closeBtn")
         self.close_btn.setFixedSize(30, 30)
         self.close_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.close_btn.clicked.connect(self.parent.close)
         self.layout.addWidget(self.close_btn)
+        
         self.start_pos = None
 
     def mousePressEvent(self, event):
@@ -138,19 +174,20 @@ class DraggableTitleBar(QWidget):
 class DLMusicApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.is_dark = True
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.resize(750, 650)
+        self.resize(750, 700)
         
         self.central_widget = QWidget()
         self.central_widget.setObjectName("centralWidget")
         self.setCentralWidget(self.central_widget)
         
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(40)
-        shadow.setColor(QColor(0, 0, 0, 120))
-        shadow.setOffset(0, 10)
-        self.central_widget.setGraphicsEffect(shadow)
+        self.shadow = QGraphicsDropShadowEffect(self)
+        self.shadow.setBlurRadius(40)
+        self.shadow.setColor(QColor(0, 0, 0, 150))
+        self.shadow.setOffset(0, 10)
+        self.central_widget.setGraphicsEffect(self.shadow)
 
         self.main_layout = QVBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
@@ -159,7 +196,7 @@ class DLMusicApp(QMainWindow):
         self.main_layout.addWidget(DraggableTitleBar(self))
         
         self.content_layout = QVBoxLayout()
-        self.content_layout.setContentsMargins(60, 0, 60, 40)
+        self.content_layout.setContentsMargins(65, 10, 65, 45)
         
         self.title_label = QLabel("dlmusic")
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -173,6 +210,7 @@ class DLMusicApp(QMainWindow):
         
         # URL Input & File Picker Row
         self.url_row = QHBoxLayout()
+        self.url_row.setSpacing(10)
         self.url_input = QLineEdit()
         self.url_input.setPlaceholderText("Paste Spotify, YouTube, or Apple Music link...")
         self.url_input.setObjectName("urlInput")
@@ -180,13 +218,14 @@ class DLMusicApp(QMainWindow):
         
         self.file_btn = QPushButton("📁")
         self.file_btn.setObjectName("fileBtn")
-        self.file_btn.setFixedSize(45, 45)
+        self.file_btn.setFixedSize(52, 52)
         self.file_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.file_btn.clicked.connect(self.select_file)
         self.url_row.addWidget(self.file_btn)
         
         self.fetch_btn = QPushButton("Fetch")
         self.fetch_btn.setObjectName("fetchBtn")
+        self.fetch_btn.setFixedSize(90, 52)
         self.fetch_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.fetch_btn.clicked.connect(self.fetch_tracks)
         self.url_row.addWidget(self.fetch_btn)
@@ -194,20 +233,20 @@ class DLMusicApp(QMainWindow):
         
         # Options Row (Format & Threads)
         self.options_row = QHBoxLayout()
-        self.options_row.setContentsMargins(0, 10, 0, 10)
+        self.options_row.setContentsMargins(0, 15, 0, 15)
         
         self.format_label = QLabel("Format:")
-        self.format_label.setStyleSheet("color: #8B8B9E; font-weight: bold;")
+        self.format_label.setStyleSheet("font-weight: bold;")
         self.options_row.addWidget(self.format_label)
         
         self.format_box = QComboBox()
         self.format_box.addItems(["mp3", "flac", "m4a", "wav"])
         self.options_row.addWidget(self.format_box)
         
-        self.options_row.addSpacing(20)
+        self.options_row.addSpacing(25)
         
         self.threads_label = QLabel("Threads:")
-        self.threads_label.setStyleSheet("color: #8B8B9E; font-weight: bold;")
+        self.threads_label.setStyleSheet("font-weight: bold;")
         self.options_row.addWidget(self.threads_label)
         
         self.threads_box = QSpinBox()
@@ -226,7 +265,7 @@ class DLMusicApp(QMainWindow):
         self.download_btn.setObjectName("downloadBtn")
         self.download_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.download_btn.clicked.connect(self.start_download)
-        self.download_btn.setEnabled(False) # Disabled until tracks are fetched
+        self.download_btn.setEnabled(False)
         self.content_layout.addWidget(self.download_btn)
         
         self.progress_bar = QProgressBar()
@@ -235,13 +274,24 @@ class DLMusicApp(QMainWindow):
         self.content_layout.addWidget(self.progress_bar)
         
         self.status_label = QLabel("Awaiting input...")
-        self.status_label.setStyleSheet("color: #8B8B9E; margin-top: 5px; font-size: 13px;")
+        self.status_label.setStyleSheet("margin-top: 5px; font-size: 13px;")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.content_layout.addWidget(self.status_label)
         
         self.main_layout.addLayout(self.content_layout)
-        self.setStyleSheet(_STYLESHEET)
+        self.apply_theme()
         self.raw_items = []
+
+    def toggle_theme(self):
+        self.is_dark = not self.is_dark
+        self.apply_theme()
+        
+    def apply_theme(self):
+        self.setStyleSheet(get_stylesheet(self.is_dark))
+        if self.is_dark:
+            self.shadow.setColor(QColor(0, 0, 0, 150))
+        else:
+            self.shadow.setColor(QColor(0, 0, 0, 40))
 
     def select_file(self):
         filename, _ = QFileDialog.getOpenFileName(self, "Select text file", "", "Text Files (*.txt)")
