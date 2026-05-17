@@ -86,7 +86,7 @@ def download_one(item: dict, outdir: str, idx: int, ejs: bool, progress, overall
         "--format", "bestaudio/best",
         "--output", os.path.join(outdir, "%(title)s.%(ext)s"),
         "--print", "after_move:filepath",
-        "--quiet",
+        "--newline",
         "--no-warnings"
     ]
     
@@ -96,8 +96,19 @@ def download_one(item: dict, outdir: str, idx: int, ejs: bool, progress, overall
     cmd.append(search_url)
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-        if result.returncode == 0:
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        filepaths = []
+        import re
+        for line in process.stdout:
+            if "[download]" in line and "%" in line:
+                match = re.search(r"(\d+\.\d+)%", line)
+                if match:
+                    progress.update(task_id, completed=float(match.group(1)), query=url)
+            elif outdir in line:
+                filepaths.append(line.strip())
+                
+        process.wait(timeout=600)
+        if process.returncode == 0:
             with lock:
                 state["done"] += 1
             progress.console.print(f"[green]✔[/green] [white]{title[:65]}[/white]")
@@ -105,9 +116,9 @@ def download_one(item: dict, outdir: str, idx: int, ejs: bool, progress, overall
             progress.advance(overall_task)
             
             # The filepath is printed to stdout by our --print after_move:filepath flag
-            filepaths = [line for line in result.stdout.strip().splitlines() if os.path.exists(line)]
-            if filepaths:
-                embed_metadata(filepaths[-1], cover_url, query=title)
+            valid_paths = [p for p in filepaths if os.path.exists(p)]
+            if valid_paths:
+                embed_metadata(valid_paths[-1], cover_url, query=title)
             
             from dlmusic.dedup import record_done
             record_done(url, outdir)

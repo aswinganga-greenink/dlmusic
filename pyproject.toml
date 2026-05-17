@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dlmusic"
-version = "2.0.2"
+version = "2.1.0"
 description = "Parallel Playlist -> MP3 Downloader"
 authors = [
     {name = "Aswin Ganga", email = "aswinganga@gmail.com"}

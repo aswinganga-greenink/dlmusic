@@ -136,11 +136,18 @@ def collect(inp: str, kind: str) -> List[Dict[str, str]]:
         try:
             # I rely on yt-dlp's flat-playlist here so it's blazingly fast
             out = subprocess.check_output(
-                ["yt-dlp", "--flat-playlist", "--print", "url", "--quiet", inp],
+                ["yt-dlp", "--flat-playlist", "--print", "%(title)s|%(url)s", "--quiet", inp],
                 stderr=subprocess.DEVNULL, timeout=90, text=True
             )
-            urls = [u.strip() for u in out.splitlines() if u.strip()]
-            return [{"query": u} for u in urls] if urls else [{"query": inp}]
+            urls = []
+            for line in out.splitlines():
+                if not line.strip(): continue
+                parts = line.split("|", 1)
+                if len(parts) == 2:
+                    urls.append({"title": parts[0], "query": parts[1]})
+                else:
+                    urls.append({"query": line})
+            return urls if urls else [{"query": inp}]
         except Exception as e:
             warn(f"Playlist extract failed ({e}), treating as single URL.")
             return [{"query": inp}]

@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QWidget, QPushButton, QLineEdit, QHBoxLayout, QGraphicsDropShadowEffect, 
     QProgressBar, QComboBox, QSpinBox, QListWidget, QListWidgetItem, QFileDialog
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QSize
 from PyQt6.QtGui import QColor, QFont, QCursor
 
 def get_stylesheet(is_dark=True):
@@ -106,8 +106,9 @@ class DummyConsole:
     def print(self, *args, **kwargs): pass
 
 class MockProgress:
-    def __init__(self, callback):
+    def __init__(self, callback, progress_callback):
         self.callback = callback
+        self.progress_callback = progress_callback
         self.console = DummyConsole()
         
     def add_task(self, description, **kwargs):
@@ -115,7 +116,10 @@ class MockProgress:
         self.callback(f"Working on: {clean[:30]}...")
         return 1
         
-    def update(self, *args, **kwargs): pass
+    def update(self, *args, **kwargs):
+        if "completed" in kwargs and "query" in kwargs:
+            self.progress_callback(kwargs["query"], float(kwargs["completed"]))
+
     def remove_task(self, *args, **kwargs): pass
     def advance(self, *args, **kwargs): pass
 
@@ -139,6 +143,7 @@ class FetcherThread(QThread):
 
 class DownloaderThread(QThread):
     progress = pyqtSignal(int, int)
+    track_progress = pyqtSignal(str, float)
     log = pyqtSignal(str)
     finished_dl = pyqtSignal()
     def __init__(self, items, audio_format, threads, outdir):
@@ -163,7 +168,7 @@ class DownloaderThread(QThread):
                 return
                 
             self.log.emit(f"Igniting Engine ({self.threads} Threads) for {total} tracks...")
-            mock_prog = MockProgress(self.log.emit)
+            mock_prog = MockProgress(self.log.emit, self.track_progress.emit)
             completed = 0
             with ThreadPoolExecutor(max_workers=self.threads) as pool:
                 futures = [pool.submit(download_one, item, self.outdir, i+1, False, mock_prog, 1, self.audio_format) for i, item in enumerate(to_download)]
@@ -218,6 +223,34 @@ class CardWidget(QWidget):
         self.setProperty("class", "Card")
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(20, 20, 20, 20)
+
+class TrackWidget(QWidget):
+    def __init__(self, title):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.setFormat(title)
+        self.progress.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.progress.setFixedHeight(35)
+        self.progress.setStyleSheet("""
+            QProgressBar {
+                background-color: transparent;
+                border: none;
+                color: #EDEDEF;
+                text-align: left;
+                padding-left: 5px;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            QProgressBar::chunk {
+                background-color: rgba(46, 204, 113, 0.35);
+                border-radius: 6px;
+            }
+        """)
+        layout.addWidget(self.progress)
 
 class DLMusicApp(QMainWindow):
     def __init__(self):
@@ -401,11 +434,19 @@ class DLMusicApp(QMainWindow):
             self.status_label.setText("No tracks found.")
             return
             
+        self.track_widgets = {}
         for item in items:
-            list_item = QListWidgetItem(item.get("query", "Unknown Track"))
+            title = item.get("title") or item.get("query", "Unknown Track")
+            list_item = QListWidgetItem()
             list_item.setFlags(list_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             list_item.setCheckState(Qt.CheckState.Checked)
+            list_item.setSizeHint(QSize(0, 42))
+            
             self.track_list.addItem(list_item)
+            
+            widget = TrackWidget(title)
+            self.track_list.setItemWidget(list_item, widget)
+            self.track_widgets[item["query"]] = widget
             
         # Smoothly expand the list widget!
         self.anim_list = QPropertyAnimation(self.track_list, b"maximumHeight")
@@ -443,9 +484,14 @@ class DLMusicApp(QMainWindow):
         
         self.worker = DownloaderThread(selected_items, self.format_box.currentText(), self.threads_box.value(), self.dir_input.text().strip())
         self.worker.progress.connect(self.update_progress)
+        self.worker.track_progress.connect(self.update_track_progress)
         self.worker.log.connect(self.update_status)
         self.worker.finished_dl.connect(self.download_finished)
         self.worker.start()
+
+    def update_track_progress(self, query, percent):
+        if query in self.track_widgets:
+            self.track_widgets[query].progress.setValue(int(percent))
 
     def update_progress(self, completed, total):
         self.progress_bar.setValue(int((completed / total) * 100))
