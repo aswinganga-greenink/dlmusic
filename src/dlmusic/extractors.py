@@ -9,6 +9,8 @@ from dlmusic.config import err, step, warn
 _re_spotify = re.compile(r"https?://open\.spotify\.com/(playlist|album|track)/[\w]+")
 _re_yt_list = re.compile(r"(youtube\.com|music\.youtube\.com).*(list=|/playlist)")
 _re_yt      = re.compile(r"https?://(www\.)?(youtube\.com|youtu\.be|music\.youtube\.com)")
+_re_sc      = re.compile(r"https?://(www\.)?soundcloud\.com")
+_re_apple   = re.compile(r"https?://music\.apple\.com")
 
 def detect(inp: str) -> str:
     """I built this to auto-detect what kind of link or file the user gave me."""
@@ -16,6 +18,8 @@ def detect(inp: str) -> str:
     if _re_spotify.search(inp):  return "spotify"
     if _re_yt_list.search(inp):  return "yt_playlist"
     if _re_yt.search(inp):       return "yt_single"
+    if _re_sc.search(inp):       return "soundcloud"
+    if _re_apple.search(inp):    return "apple"
     return "query"
 
 def spotify_to_queries(url: str) -> List[Dict[str, str]]:
@@ -127,12 +131,12 @@ def collect(inp: str, kind: str) -> List[Dict[str, str]]:
     if kind == "spotify":
         return spotify_to_queries(inp)
 
-    if kind in ("yt_playlist", "yt_single"):
-        step("Fetching playlist entries from YouTube…")
+    if kind in ("yt_playlist", "yt_single", "soundcloud", "apple"):
+        step("Fetching playlist entries via yt-dlp…")
         try:
             # I rely on yt-dlp's flat-playlist here so it's blazingly fast
             out = subprocess.check_output(
-                ["yt-dlp", "--flat-playlist", "--get-url", "--quiet", inp],
+                ["yt-dlp", "--flat-playlist", "--print", "url", "--quiet", inp],
                 stderr=subprocess.DEVNULL, timeout=90, text=True
             )
             urls = [u.strip() for u in out.splitlines() if u.strip()]
