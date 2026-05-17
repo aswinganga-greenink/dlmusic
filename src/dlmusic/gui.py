@@ -102,10 +102,22 @@ QScrollBar::handle:vertical:hover {{ background-color: {text_muted}; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
 """
 
+class DummyConsole:
+    def print(self, *args, **kwargs): pass
+
 class MockProgress:
-    def add_task(self, *args, **kwargs): return 1
+    def __init__(self, callback):
+        self.callback = callback
+        self.console = DummyConsole()
+        
+    def add_task(self, description, **kwargs):
+        clean = str(description).replace("[cyan]", "").replace("[/cyan]", "").replace("...", "")
+        self.callback(f"Working on: {clean[:30]}...")
+        return 1
+        
     def update(self, *args, **kwargs): pass
     def remove_task(self, *args, **kwargs): pass
+    def advance(self, *args, **kwargs): pass
 
 class FetcherThread(QThread):
     log = pyqtSignal(str)
@@ -151,7 +163,7 @@ class DownloaderThread(QThread):
                 return
                 
             self.log.emit(f"Igniting Engine ({self.threads} Threads) for {total} tracks...")
-            mock_prog = MockProgress()
+            mock_prog = MockProgress(self.log.emit)
             completed = 0
             with ThreadPoolExecutor(max_workers=self.threads) as pool:
                 futures = [pool.submit(download_one, item, self.outdir, i+1, False, mock_prog, 1, self.audio_format) for i, item in enumerate(to_download)]
@@ -159,7 +171,7 @@ class DownloaderThread(QThread):
                     success, title = f.result()
                     completed += 1
                     self.progress.emit(completed, total)
-                    self.log.emit(f"Downloaded: {title[:40]}")
+                    self.log.emit(f"Downloaded ({completed}/{total}): {title[:30]}...")
                     
             self.log.emit("All downloads complete! Check ~/Downloads/dlmusic")
             self.finished_dl.emit()
