@@ -4,8 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dlmusic"
-version = "1.1.2"
-description = "A highly parallel playlist to MP3 downloader."
+version = "2.0.0"
+description = "Parallel Playlist -> MP3 Downloader"
+authors = [
+    {name = "Aswin Ganga", email = "aswinganga@gmail.com"}
+]
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [

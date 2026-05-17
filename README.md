@@ -17,7 +17,8 @@
 - 🎨 **Audiophile Metadata**: Bypasses YouTube's low-res thumbnails by scraping the public Spotify API for exact **640x640 High-Res Album Art** and injecting it natively.
 - 🎤 **Auto-Scrolling Lyrics**: Integrates with LRCLIB to silently scrape and embed `.lrc` (Synchronized Lyrics) metadata into the ID3 tags of your MP3s. Play it on your phone and watch the lyrics auto-scroll!
 - 🧠 **Smart Resume**: An intelligent `O(1)` manifest system guarantees you will never re-download an existing file if your connection drops. 
-- 🖥️ **Wizard TUI**: Don't like CLI flags? Run `dlmusic` with zero arguments to trigger a beautiful, rich terminal UI wizard.
+- 🖥️ **Awwwards-Level Native GUI**: Run `dlmusic` with zero arguments to trigger our brand new hardware-accelerated PyQt6 interface. Features cinematic glassmorphism, dynamic Light/Dark mode (`◑`), smooth slide animations, and full interactive track selection!
+- 🎛️ **Total Granular Control**: Choose between MP3, FLAC, M4A, and WAV output formats, and crank your download concurrency up to 16 threads directly from the UI.
 
 ## 📦 Installation
 
