@@ -9,10 +9,10 @@ def test_gui_initialization(qtbot):
     
     assert window.windowTitle() == ""
     assert window.title_label.text() == "dlmusic"
-    assert window.subtitle_label.text() == "Paste a playlist URL below to begin mirroring."
+    assert window.subtitle_label.text() == "The Ultimate Audiophile Engine."
     
     # Assert default state of input fields
-    assert window.url_input.placeholderText() == "https://open.spotify.com/playlist/..."
+    assert window.url_input.placeholderText() == "Paste Spotify, YouTube, or Apple Music link..."
     
 def test_gui_button_state(qtbot):
     """Assert interactive elements are wired up and accessible."""
@@ -20,4 +20,9 @@ def test_gui_button_state(qtbot):
     qtbot.addWidget(window)
     
     assert window.download_btn.text() == "Start Engine"
-    assert window.download_btn.isEnabled()
+    assert not window.download_btn.isEnabled() # Should be disabled until tracks are fetched
+    
+    assert window.format_box.currentText() == "mp3"
+    assert window.threads_box.value() == 4
+    
+    assert window.fetch_btn.text() == "Fetch"
