@@ -1,0 +1,293 @@
+#!/usr/bin/env python3
+"""
+dlmusic — Parallel Playlist → MP3 Downloader
+Supports: YouTube · YouTube Music · Spotify · .txt files
+Usage: dlmusic <url|file.txt> [output-dir] [--threads N]
+"""
+
+import sys, os, re, argparse, subprocess, threading, time, shutil
+from pathlib import Path
+
+
+_pyver     = f"python{sys.version_info.major}.{sys.version_info.minor}"
+_user_site = str(Path.home() / ".local" / "lib" / _pyver / "site-packages")
+if _user_site not in sys.path:
+    sys.path.insert(0, _user_site)
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Tuple
+
+# ── Colours ────────────────────────────────────────────────────────────────────
+R="\033[0m"; BOLD="\033[1m"; DIM="\033[2m"
+RED="\033[1;31m"; GRN="\033[1;32m"; YEL="\033[1;33m"
+BLU="\033[1;34m"; MAG="\033[1;35m"; CYN="\033[1;36m"; WHT="\033[1;37m"
+
+_lock   = threading.Lock()
+_done   = 0
+_failed = 0
+_total  = 0
+
+def pr(msg="", **kw):
+    with _lock: print(msg, **kw)
+
+def info(m):  pr(f"{CYN}  ℹ {R} {m}")
+def ok(m):    pr(f"{GRN}  ✔ {R} {m}")
+def warn(m):  pr(f"{YEL}  ⚠ {R} {m}")
+def err(m):   pr(f"{RED}  ✘ {R} {m}")
+def step(m):  pr(f"{BLU}{BOLD}  ➜ {R}{BOLD} {m}{R}")
+
+def banner():
+    pr(f"""
+{MAG}{BOLD}  ╔═══════════════════════════════════════════════════╗
+  ║  🎵  dlmusic — Parallel Playlist Downloader       ║
+  ║      YouTube · YouTube Music · Spotify · TXT      ║
+  ╚═══════════════════════════════════════════════════╝{R}
+""")
+
+# ── Patterns ───────────────────────────────────────────────────────────────────
+_re_spotify = re.compile(r"https?://open\.spotify\.com/(playlist|album|track)/[\w]+")
+_re_yt_list = re.compile(r"(youtube\.com|music\.youtube\.com).*(list=|/playlist)")
+_re_yt      = re.compile(r"https?://(www\.)?(youtube\.com|youtu\.be|music\.youtube\.com)")
+
+def detect(inp: str) -> str:
+    if Path(inp).is_file() and inp.endswith(".txt"): return "txt"
+    if _re_spotify.search(inp):  return "spotify"
+    if _re_yt_list.search(inp):  return "yt_playlist"
+    if _re_yt.search(inp):       return "yt_single"
+    return "query"
+
+# ── Spotify extraction (uses spotapi — no credentials needed) ──────────────────
+def spotify_to_queries(url: str) -> List[str]:
+    """Return list of 'Artist - Title' search strings from a Spotify URL."""
+    try:
+        from spotapi import PublicPlaylist, PublicAlbum, Song
+    except ImportError as e:
+        err(f"spotapi import failed: {e}")
+        err("Run: pip install spotapi --break-system-packages")
+        sys.exit(1)
+
+    match = re.search(r"spotify\.com/(playlist|album|track)/([A-Za-z0-9]+)", url)
+    if not match:
+        err(f"Cannot parse Spotify URL: {url}")
+        return []
+
+    kind, item_id = match.group(1), match.group(2)
+    step(f"Fetching Spotify {kind} metadata…")
+
+    try:
+        if kind == "playlist":
+            pl      = PublicPlaylist(item_id)
+            queries = []
+            for page in pl.paginate_playlist():
+                items = page["items"]
+                for item in items:
+                    track   = item.get("itemV2", {}).get("data", {})
+                    name    = track.get("name", "")
+                    artists = track.get("artists", {}).get("items", [])
+                    artist  = artists[0]["profile"]["name"] if artists else ""
+                    if name:
+                        queries.append(f"{artist} - {name}" if artist else name)
+            return queries
+
+        elif kind == "album":
+            data  = PublicAlbum(item_id).get_album_info()
+            items = data["data"]["albumUnion"]["tracks"]["items"]
+            queries = []
+            for item in items:
+                track   = item.get("track", {})
+                name    = track.get("name", "")
+                artists = track.get("artists", {}).get("items", [])
+                artist  = artists[0]["profile"]["name"] if artists else ""
+                if name:
+                    queries.append(f"{artist} - {name}" if artist else name)
+            return queries
+
+        elif kind == "track":
+            data    = Song(item_id).get_track_info()
+            name    = data.get("name", "")
+            artists = data.get("artists", {}).get("items", [])
+            artist  = artists[0]["profile"]["name"] if artists else ""
+            return [f"{artist} - {name}" if artist else name]
+
+    except Exception as e:
+        err(f"Spotify fetch failed: {type(e).__name__}: {e}")
+        return []
+
+    return []
+
+# ── Collect URLs / queries ─────────────────────────────────────────────────────
+def collect(inp: str, kind: str) -> List[str]:
+    if kind == "txt":
+        lines = Path(inp).read_text().splitlines()
+        return [l.strip() for l in lines if l.strip() and not l.startswith("#")]
+
+    if kind == "spotify":
+        return spotify_to_queries(inp)
+
+    if kind in ("yt_playlist", "yt_single"):
+        step("Fetching playlist entries from YouTube…")
+        try:
+            out = subprocess.check_output(
+                ["yt-dlp", "--flat-playlist", "--get-url", "--quiet", inp],
+                stderr=subprocess.DEVNULL, timeout=90, text=True
+            )
+            urls = [u.strip() for u in out.splitlines() if u.strip()]
+            return urls if urls else [inp]
+        except Exception as e:
+            warn(f"Playlist extract failed ({e}), treating as single URL.")
+            return [inp]
+
+    return [inp]  # single URL or bare query
+
+# ── Single track download ──────────────────────────────────────────────────────
+def download_one(url: str, outdir: str, idx: int, ejs: bool) -> Tuple[bool, str]:
+    global _done, _failed
+
+    search_url = f"ytsearch1:{url}" if not url.startswith("http") else url
+    label = url[:55]
+
+    # Silently fetch title
+    try:
+        raw = subprocess.check_output(
+            ["yt-dlp", "--no-playlist", "--get-title", "--js-runtimes", "node",
+             "--quiet", search_url],
+            stderr=subprocess.DEVNULL, timeout=30, text=True
+        ).strip()
+        title = raw.splitlines()[0] if raw else label
+    except Exception:
+        title = label
+
+    pr(f"  {BLU}↓{R} {DIM}[{idx:>3}/{_total}]{R} {title[:65]}")
+
+    cmd = [
+        "yt-dlp", "--no-playlist",
+        "--extract-audio", "--audio-format", "mp3", "--audio-quality", "0",
+        "--embed-thumbnail", "--embed-metadata", "--add-metadata",
+        "--js-runtimes", "node",
+        "--format", "bestaudio/best",
+        "--output", os.path.join(outdir, "%(title)s.%(ext)s"),
+        "--quiet",
+    ]
+    if ejs:
+        cmd += ["--remote-components", "ejs:github"]
+    cmd.append(search_url)
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        if result.returncode == 0:
+            with _lock:
+                _done += 1
+            progress.console.print(f"[green]✔[/green] [white]{title[:65]}[/white]")
+            progress.remove_task(task_id)
+            progress.advance(overall_task)
+            return True, title
+        else:
+            emsg = result.stderr.strip().splitlines()[-1][:80] if result.stderr.strip() else "unknown error"
+            with _lock:
+                _failed += 1
+            progress.console.print(f"[red]✘[/red] {title[:50]} — [dim]{emsg}[/dim]")
+            progress.remove_task(task_id)
+            progress.advance(overall_task)
+            return False, title
+    except subprocess.TimeoutExpired:
+        with _lock:
+            _failed += 1
+        progress.console.print(f"[red]✘[/red] {title[:50]} — timed out")
+        progress.remove_task(task_id)
+        progress.advance(overall_task)
+        return False, title
+    except Exception as ex:
+        with _lock:
+            _failed += 1
+        progress.console.print(f"[red]✘[/red] {title[:50]} — {str(ex)[:60]}")
+        progress.remove_task(task_id)
+        progress.advance(overall_task)
+        return False, title
+
+# ── Main ───────────────────────────────────────────────────────────────────────
+def main():
+    global _total
+
+    parser = argparse.ArgumentParser(
+        prog="dlmusic",
+        description="Parallel Playlist → MP3 Downloader",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  dlmusic playlist.txt ~/Music
+  dlmusic "https://youtube.com/playlist?list=PLxxx" ~/Music --threads 6
+  dlmusic "https://music.youtube.com/playlist?list=PLxxx" ./out
+  dlmusic "https://open.spotify.com/playlist/xxx" ~/Music --threads 4
+        """
+    )
+    parser.add_argument("input",           help=".txt file or playlist URL")
+    parser.add_argument("outdir",          nargs="?", default="./downloads", help="Output folder (default: ./downloads)")
+    parser.add_argument("--threads", "-t", type=int, default=4,  help="Parallel download threads (default: 4)")
+    parser.add_argument("--ejs",           action="store_true",   help="Enable remote EJS challenge solver (downloads from GitHub)")
+    parser.add_argument("--interactive", "-i", action="store_true", help="Interactively select tracks to skip")
+    parser.add_argument("--format", "-f",  choices=["mp3", "flac", "m4a", "wav"], default="mp3", help="Audio format (default: mp3)")
+    args = parser.parse_args()
+
+    banner()
+
+    for dep in ("yt-dlp", "ffmpeg"):
+        if not shutil.which(dep):
+            err(f"Missing dependency: {dep}")
+            sys.exit(1)
+
+    kind   = detect(args.input)
+    outdir = str(Path(args.outdir).expanduser())
+    Path(outdir).mkdir(parents=True, exist_ok=True)
+
+    info(f"Output folder : {CYN}{outdir}{R}")
+    info(f"Threads       : {CYN}{args.threads}{R}")
+    info(f"Input type    : {CYN}{kind}{R}")
+    pr()
+
+    items = collect(args.input, kind)
+    if not items:
+        err("No URLs or queries found in input.")
+        sys.exit(1)
+
+    _total = len(items)\n    info(f"Tracks found  : {CYN}{_total}{R}")
+    pr()
+    step(f"Starting parallel download with {args.threads} threads…")
+    pr()
+
+    t_start = time.time()
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeRemainingColumn(),
+        console=_console
+    ) as progress:
+        overall_task = progress.add_task("[bold magenta]Overall Progress", total=_total)
+
+        results = [None] * len(items)
+        with ThreadPoolExecutor(max_workers=args.threads) as pool:
+            futures = {
+                pool.submit(download_one, item, outdir, idx + 1, args.ejs, progress, overall_task): idx
+                for idx, item in enumerate(items)
+            }
+            for f in as_completed(futures):
+                f.result()
+
+    elapsed = time.time() - t_start
+
+    pr()
+    pr(f"{MAG}{BOLD}  ╔═══════════════════════════════════════╗{R}")
+    pr(f"{MAG}{BOLD}  ║           Download Summary            ║{R}")
+    pr(f"{MAG}{BOLD}  ╚═══════════════════════════════════════╝{R}")
+    pr(f"    {GRN}✔  Done    : {_done}{R}")
+    pr(f"    {RED}✘  Failed  : {_failed}{R}")
+    pr(f"    {CYN}⏱  Time    : {elapsed:.1f}s{R}")
+    pr(f"    {WHT}📁  Saved to: {outdir}{R}")
+    if m3u_created:
+        pr(f"    {WHT}🎶  Playlist: {m3u_file.name}{R}")
+    pr()
+
+if __name__ == "__main__":
+    main()
