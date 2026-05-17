@@ -144,6 +144,8 @@ class FetcherThread(QThread):
 class DownloaderThread(QThread):
     progress = pyqtSignal(int, int)
     track_progress = pyqtSignal(str, float)
+    track_started = pyqtSignal(str)
+    track_done = pyqtSignal(str, bool)
     log = pyqtSignal(str)
     finished_dl = pyqtSignal()
     def __init__(self, items, audio_format, threads, outdir):
@@ -170,11 +172,20 @@ class DownloaderThread(QThread):
             self.log.emit(f"Igniting Engine ({self.threads} Threads) for {total} tracks...")
             mock_prog = MockProgress(self.log.emit, self.track_progress.emit)
             completed = 0
+            
+            # Map futures back to their item query for tracking
+            future_to_query = {}
             with ThreadPoolExecutor(max_workers=self.threads) as pool:
-                futures = [pool.submit(download_one, item, self.outdir, i+1, False, mock_prog, 1, self.audio_format) for i, item in enumerate(to_download)]
-                for f in as_completed(futures):
+                for i, item in enumerate(to_download):
+                    self.track_started.emit(item["query"])
+                    f = pool.submit(download_one, item, self.outdir, i+1, False, mock_prog, 1, self.audio_format)
+                    future_to_query[f] = item["query"]
+                    
+                for f in as_completed(future_to_query):
+                    query = future_to_query[f]
                     success, title = f.result()
                     completed += 1
+                    self.track_done.emit(query, success)
                     self.progress.emit(completed, total)
                     self.log.emit(f"Downloaded ({completed}/{total}): {title[:30]}...")
                     
@@ -230,10 +241,17 @@ class TrackWidget(QWidget):
         self.setMinimumHeight(40)
         self.title = title
         self._percent = 0
-        self._is_dark = is_dark
+        self._state = "queued"  # queued | downloading | done | failed
+        self._pulse_opacity = 0.0
+        self._pulse_dir = 1
         
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 6, 12, 6)
+        
+        self.status_icon = QLabel("○")
+        self.status_icon.setFixedWidth(20)
+        self.status_icon.setStyleSheet("font-size: 12px; color: #8A8F98; background: transparent;")
+        layout.addWidget(self.status_icon)
         
         self.label = QLabel(title)
         self.label.setStyleSheet("font-size: 13px; font-weight: 600; background: transparent;")
@@ -242,16 +260,53 @@ class TrackWidget(QWidget):
         self.pct_label = QLabel("")
         self.pct_label.setStyleSheet("font-size: 11px; color: #8A8F98; background: transparent;")
         self.pct_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.pct_label.setFixedWidth(45)
+        self.pct_label.setFixedWidth(50)
         layout.addWidget(self.pct_label)
+        
+        # Pulse timer for downloading state
+        from PyQt6.QtCore import QTimer
+        self._pulse_timer = QTimer(self)
+        self._pulse_timer.timeout.connect(self._animate_pulse)
+    
+    def set_started(self):
+        self._state = "downloading"
+        self.status_icon.setText("↓")
+        self.status_icon.setStyleSheet("font-size: 14px; color: #F59E0B; background: transparent;")
+        self.pct_label.setText("0%")
+        self._pulse_timer.start(50)
+        self.update()
     
     def set_progress(self, percent):
         self._percent = min(int(percent), 100)
-        if self._percent > 0:
+        if self._state != "done":
+            self._state = "downloading"
             self.pct_label.setText(f"{self._percent}%")
-        if self._percent >= 100:
-            self.pct_label.setText("✔")
-            self.pct_label.setStyleSheet("font-size: 14px; color: #2ECC71; background: transparent;")
+        self.update()
+        
+    def set_done(self, success=True):
+        self._pulse_timer.stop()
+        self._pulse_opacity = 0.0
+        if success:
+            self._state = "done"
+            self._percent = 100
+            self.status_icon.setText("✔")
+            self.status_icon.setStyleSheet("font-size: 14px; color: #2ECC71; background: transparent;")
+            self.pct_label.setText("Done")
+            self.pct_label.setStyleSheet("font-size: 11px; color: #2ECC71; font-weight: bold; background: transparent;")
+        else:
+            self._state = "failed"
+            self.status_icon.setText("✘")
+            self.status_icon.setStyleSheet("font-size: 14px; color: #EF4444; background: transparent;")
+            self.pct_label.setText("Failed")
+            self.pct_label.setStyleSheet("font-size: 11px; color: #EF4444; font-weight: bold; background: transparent;")
+        self.update()
+    
+    def _animate_pulse(self):
+        self._pulse_opacity += 0.04 * self._pulse_dir
+        if self._pulse_opacity >= 0.6:
+            self._pulse_dir = -1
+        elif self._pulse_opacity <= 0.05:
+            self._pulse_dir = 1
         self.update()
         
     def paintEvent(self, event):
@@ -259,14 +314,23 @@ class TrackWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        if self._percent > 0:
-            fill_width = int(self.width() * (self._percent / 100.0))
+        if self._state == "downloading":
+            fill_width = max(int(self.width() * (self._percent / 100.0)), int(self.width() * 0.08))
+            opacity = int(self._pulse_opacity * 255) if self._percent == 0 else 60
             gradient = QLinearGradient(0, 0, fill_width, 0)
-            gradient.setColorAt(0.0, QColor(46, 204, 113, 60))
-            gradient.setColorAt(1.0, QColor(46, 204, 113, 30))
+            gradient.setColorAt(0.0, QColor(245, 158, 11, opacity))
+            gradient.setColorAt(1.0, QColor(245, 158, 11, max(opacity - 30, 10)))
             painter.setBrush(gradient)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(0, 0, fill_width, self.height(), 6, 6)
+        elif self._state == "done":
+            painter.setBrush(QColor(46, 204, 113, 35))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(0, 0, self.width(), self.height(), 6, 6)
+        elif self._state == "failed":
+            painter.setBrush(QColor(239, 68, 68, 25))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(0, 0, self.width(), self.height(), 6, 6)
         
         painter.end()
         super().paintEvent(event)
@@ -504,9 +568,19 @@ class DLMusicApp(QMainWindow):
         self.worker = DownloaderThread(selected_items, self.format_box.currentText(), self.threads_box.value(), self.dir_input.text().strip())
         self.worker.progress.connect(self.update_progress)
         self.worker.track_progress.connect(self.update_track_progress)
+        self.worker.track_started.connect(self.on_track_started)
+        self.worker.track_done.connect(self.on_track_done)
         self.worker.log.connect(self.update_status)
         self.worker.finished_dl.connect(self.download_finished)
         self.worker.start()
+
+    def on_track_started(self, query):
+        if query in self.track_widgets:
+            self.track_widgets[query].set_started()
+
+    def on_track_done(self, query, success):
+        if query in self.track_widgets:
+            self.track_widgets[query].set_done(success)
 
     def update_track_progress(self, query, percent):
         if query in self.track_widgets:

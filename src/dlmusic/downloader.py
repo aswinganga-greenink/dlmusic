@@ -96,10 +96,13 @@ def download_one(item: dict, outdir: str, idx: int, ejs: bool, progress, overall
     cmd.append(search_url)
 
     try:
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         filepaths = []
         import re
-        for line in process.stdout:
+        for line in iter(process.stdout.readline, ''):
+            line = line.rstrip()
+            if not line:
+                continue
             if "[download]" in line and "%" in line:
                 match = re.search(r"(\d+(?:\.\d+)?)%", line)
                 if match:
