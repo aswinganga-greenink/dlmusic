@@ -15,15 +15,12 @@ def _norm(s: str) -> str:
 
 def is_present(query: str, outdir: str) -> bool:
     """
-    I wrote this two-phase check:
-    1. O(1) manifest lookup for blazing fast resumes on tracks we know we downloaded.
-    2. Fallback to O(N) fuzzy filename overlap (>= 65%) to catch older files.
+    I perform an O(N) fuzzy filename overlap (>= 65%) against actual files on disk.
+    This guarantees that if a user deletes a track, we correctly identify it as missing and re-download!
     """
-    manifest = Path(outdir) / _MANIFEST
-    if manifest.exists():
-        if query in set(manifest.read_text(encoding="utf-8").splitlines()):
-            return True
-
+    if not Path(outdir).exists():
+        return False
+        
     norm_q = _norm(query)
     q_words = set(norm_q.split()) - _STOP_WORDS
     if not q_words:
@@ -38,8 +35,5 @@ def is_present(query: str, outdir: str) -> bool:
     return False
 
 def record_done(query: str, outdir: str) -> None:
-    """Thread-safe append to the manifest so future runs skip this track instantly."""
-    manifest = Path(outdir) / _MANIFEST
-    with lock:
-        with open(manifest, "a", encoding="utf-8") as fh:
-            fh.write(query + "\n")
+    """No longer strictly needed since we dynamically verify the disk state directly."""
+    pass
