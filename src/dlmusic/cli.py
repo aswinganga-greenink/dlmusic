@@ -14,7 +14,7 @@ except ImportError:
     print("Run: pip install rich --break-system-packages")
     sys.exit(1)
 
-from dlmusic.config import state, banner, err, info, pr, step, DIM, R, BLU, CYN, MAG, BOLD, GRN, RED, YEL, WHT, ok
+from dlmusic.config import state, banner, err, warn, info, pr, step, DIM, R, BLU, CYN, MAG, BOLD, GRN, RED, YEL, WHT, ok
 from dlmusic.extractors import detect, collect
 from dlmusic.downloader import download_one
 
