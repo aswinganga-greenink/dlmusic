@@ -20,36 +20,38 @@ def get_stylesheet(is_dark=True):
         accent = "#5E6AD2"
         btn_hover = "#6F7AE0"
         btn_pressed = "#4651B5"
+        selection_bg = "rgba(94, 106, 210, 0.15)"
     else:
         bg = "transparent"
         central = "#F7F7F9"
-        border = "rgba(0, 0, 0, 0.06)"
+        border = "rgba(0, 0, 0, 0.08)"
         card_bg = "#FFFFFF"
         text = "#1A1A1F"
         text_muted = "#666677"
-        input_bg = "#FAFAFC"
+        input_bg = "#F0F0F4"
         input_focus = "#FFFFFF"
         accent = "#5E6AD2"
         btn_hover = "#6F7AE0"
         btn_pressed = "#4651B5"
+        selection_bg = "rgba(94, 106, 210, 0.1)"
         
     return f"""
 QMainWindow {{ background-color: {bg}; }}
 QWidget#centralWidget {{ background-color: {central}; border-radius: 20px; border: 1px solid {border}; }}
 
-/* Cards for grouping UI elements */
-QWidget.Card {{
-    background-color: {card_bg};
-    border-radius: 14px;
-    border: 1px solid {border};
-}}
+/* Cards */
+QWidget.Card {{ background-color: {card_bg}; border-radius: 14px; border: 1px solid {border}; }}
 
+/* Typography */
 QLabel#titleLabel {{ color: {text}; font-size: 42px; font-weight: 900; margin-top: 5px; letter-spacing: -2px; }}
 QLabel#subtitleLabel {{ color: {text_muted}; font-size: 15px; margin-bottom: 15px; }}
+QLabel {{ color: {text}; }}
 
+/* Text Inputs */
 QLineEdit#urlInput {{ background-color: {input_bg}; border: 1px solid {border}; border-radius: 10px; color: {text}; padding: 12px 18px; font-size: 14px; selection-background-color: {accent}; }}
 QLineEdit#urlInput:focus {{ border: 1px solid {accent}; background-color: {input_focus}; }}
 
+/* Buttons */
 QPushButton#downloadBtn {{ background-color: {accent}; color: #FFFFFF; border-radius: 12px; font-size: 16px; font-weight: bold; padding: 14px; }}
 QPushButton#downloadBtn:hover {{ background-color: {btn_hover}; }}
 QPushButton#downloadBtn:pressed {{ background-color: {btn_pressed}; }}
@@ -62,16 +64,40 @@ QPushButton#closeBtn, QPushButton#themeBtn {{ background-color: transparent; col
 QPushButton#closeBtn:hover {{ color: #EF4444; }}
 QPushButton#themeBtn:hover {{ color: {accent}; }}
 
+/* Progress Bar */
 QProgressBar {{ background-color: {input_bg}; border-radius: 6px; height: 8px; border: none; margin-top: 10px; }}
 QProgressBar::chunk {{ background-color: {accent}; border-radius: 4px; }}
 
-QComboBox, QSpinBox {{ background-color: {input_bg}; border: 1px solid {border}; border-radius: 8px; color: {text}; padding: 8px; font-size: 14px; }}
-QComboBox::drop-down {{ border: none; }}
+/* Combo Box (Format Selection) */
+QComboBox {{ background-color: {input_bg}; border: 1px solid {border}; border-radius: 8px; color: {text}; padding: 8px 12px; font-size: 14px; min-width: 70px; }}
+QComboBox:hover {{ border: 1px solid {accent}; }}
+QComboBox::drop-down {{ border: none; width: 30px; }}
+QComboBox::down-arrow {{ image: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 5px solid {text_muted}; margin-right: 10px; }}
+QComboBox QAbstractItemView {{ background-color: {card_bg}; border: 1px solid {border}; border-radius: 8px; color: {text}; selection-background-color: {accent}; selection-color: #FFFFFF; outline: none; padding: 4px; }}
 
+/* Spin Box (Threads Selection) */
+QSpinBox {{ background-color: {input_bg}; border: 1px solid {border}; border-radius: 8px; color: {text}; padding: 8px 12px; font-size: 14px; min-width: 50px; }}
+QSpinBox:hover {{ border: 1px solid {accent}; }}
+QSpinBox::up-button, QSpinBox::down-button {{ background-color: transparent; border: none; width: 24px; }}
+QSpinBox::up-arrow {{ border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 5px solid {text_muted}; }}
+QSpinBox::down-arrow {{ border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid {text_muted}; }}
+QSpinBox::up-button:hover QSpinBox::up-arrow {{ border-bottom-color: {accent}; }}
+QSpinBox::down-button:hover QSpinBox::down-arrow {{ border-top-color: {accent}; }}
+
+/* Interactive Track List */
 QListWidget {{ background-color: {input_bg}; border: 1px solid {border}; border-radius: 12px; color: {text}; padding: 8px; font-size: 13px; outline: 0; }}
-QListWidget::item {{ padding: 8px; border-bottom: 1px solid {border}; border-radius: 6px; }}
-QListWidget::item:selected {{ background-color: rgba(94, 106, 210, 0.15); border: 1px solid {accent}; color: {accent}; }}
-QLabel {{ color: {text}; }}
+QListWidget::item {{ padding: 10px; border-bottom: 1px solid {border}; border-radius: 6px; }}
+QListWidget::item:selected {{ background-color: {selection_bg}; border: 1px solid {accent}; color: {accent}; }}
+
+/* Checkboxes inside List */
+QListWidget::indicator {{ width: 18px; height: 18px; border: 2px solid {border}; border-radius: 4px; background-color: {card_bg}; }}
+QListWidget::indicator:checked {{ background-color: {accent}; border: 2px solid {accent}; }}
+
+/* Sleek Scrollbars */
+QScrollBar:vertical {{ background-color: transparent; width: 8px; margin: 0px; }}
+QScrollBar::handle:vertical {{ background-color: {border}; border-radius: 4px; min-height: 20px; }}
+QScrollBar::handle:vertical:hover {{ background-color: {text_muted}; }}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
 """
 
 class MockProgress:
