@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dlmusic"
+version = "1.0.0"
+description = "A highly parallel playlist to MP3 downloader."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "spotapi",
+    "rich",
+    "yt-dlp"
+]
+
+[project.scripts]
+dlmusic = "dlmusic.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
