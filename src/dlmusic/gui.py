@@ -129,12 +129,12 @@ class DownloaderThread(QThread):
     progress = pyqtSignal(int, int)
     log = pyqtSignal(str)
     finished_dl = pyqtSignal()
-    def __init__(self, items, audio_format, threads):
+    def __init__(self, items, audio_format, threads, outdir):
         super().__init__()
         self.items = items
         self.audio_format = audio_format
         self.threads = threads
-        self.outdir = os.path.expanduser("~/Downloads/dlmusic")
+        self.outdir = outdir
     def run(self):
         try:
             from dlmusic.dedup import is_present
@@ -268,6 +268,23 @@ class DLMusicApp(QMainWindow):
         self.fetch_btn.clicked.connect(self.fetch_tracks)
         self.url_row.addWidget(self.fetch_btn)
         self.card_input.layout.addLayout(self.url_row)
+        
+        self.dir_row = QHBoxLayout()
+        self.dir_row.setSpacing(10)
+        self.dir_row.setContentsMargins(0, 15, 0, 0)
+        self.dir_input = QLineEdit()
+        self.dir_input.setText(os.path.expanduser("~/Downloads/dlmusic"))
+        self.dir_input.setObjectName("urlInput")
+        self.dir_row.addWidget(self.dir_input)
+        
+        self.dir_btn = QPushButton("📂")
+        self.dir_btn.setObjectName("fileBtn")
+        self.dir_btn.setFixedSize(46, 46)
+        self.dir_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.dir_btn.clicked.connect(self.select_dir)
+        self.dir_row.addWidget(self.dir_btn)
+        self.card_input.layout.addLayout(self.dir_row)
+        
         self.content_layout.addWidget(self.card_input)
         
         # --- Card 2: Configuration ---
@@ -347,6 +364,11 @@ class DLMusicApp(QMainWindow):
         if filename:
             self.url_input.setText(filename)
             self.fetch_tracks()
+            
+    def select_dir(self):
+        directory = QFileDialog.getExistingDirectory(self, "Select Output Directory", self.dir_input.text())
+        if directory:
+            self.dir_input.setText(directory)
 
     def fetch_tracks(self):
         url = self.url_input.text().strip()
@@ -395,6 +417,8 @@ class DLMusicApp(QMainWindow):
         self.fetch_btn.setEnabled(False)
         self.file_btn.setEnabled(False)
         self.url_input.setEnabled(False)
+        self.dir_input.setEnabled(False)
+        self.dir_btn.setEnabled(False)
         
         # Smoothly expand progress bar
         self.progress_bar.setValue(0)
@@ -405,7 +429,7 @@ class DLMusicApp(QMainWindow):
         self.anim_prog.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.anim_prog.start()
         
-        self.worker = DownloaderThread(selected_items, self.format_box.currentText(), self.threads_box.value())
+        self.worker = DownloaderThread(selected_items, self.format_box.currentText(), self.threads_box.value(), self.dir_input.text().strip())
         self.worker.progress.connect(self.update_progress)
         self.worker.log.connect(self.update_status)
         self.worker.finished_dl.connect(self.download_finished)
@@ -423,6 +447,8 @@ class DLMusicApp(QMainWindow):
         self.fetch_btn.setEnabled(True)
         self.file_btn.setEnabled(True)
         self.url_input.setEnabled(True)
+        self.dir_input.setEnabled(True)
+        self.dir_btn.setEnabled(True)
         
         # Collapse progress bar gracefully
         self.anim_prog = QPropertyAnimation(self.progress_bar, b"maximumHeight")
