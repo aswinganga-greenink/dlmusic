@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dlmusic"
-version = "1.0.0"
+version = "1.1.0"
 description = "A highly parallel playlist to MP3 downloader."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -12,7 +12,8 @@ dependencies = [
     "spotapi",
     "rich",
     "yt-dlp",
-    "mutagen"
+    "mutagen",
+    "syncedlyrics"
 ]
 
 [project.scripts]
