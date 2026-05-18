@@ -5,38 +5,54 @@ from dlmusic.config import lock, state
 
 import urllib.request
 
-def embed_cover_art(audio_path: str, cover_url: str):
-    """I built this to strictly embed high-res Spotify cover art if it's available, replacing the yt-dlp thumbnail."""
-    if not cover_url or not audio_path or not os.path.exists(audio_path):
+def embed_metadata(audio_path: str, cover_url: str, query: str):
+    """Embeds high-res Spotify cover art and synced lyrics."""
+    if not audio_path or not os.path.exists(audio_path):
         return
     try:
         import mutagen
         from mutagen.mp3 import MP3
-        from mutagen.id3 import ID3, APIC
+        from mutagen.id3 import ID3, APIC, USLT
         from mutagen.flac import FLAC, Picture
         from mutagen.mp4 import MP4, MP4Cover
         
-        req = urllib.request.Request(cover_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as resp:
-            img_data = resp.read()
+        # 1. Fetch Synced Lyrics
+        import syncedlyrics
+        lrc_text = syncedlyrics.search(query)
+        
+        # 2. Fetch Cover Art
+        img_data = None
+        if cover_url:
+            req = urllib.request.Request(cover_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req) as resp:
+                img_data = resp.read()
             
         audio = mutagen.File(audio_path)
         if audio is None: return
             
         if isinstance(audio, MP3):
             if audio.tags is None: audio.add_tags()
-            audio.tags.add(APIC(encoding=3, mime='image/jpeg', type=3, desc='Cover', data=img_data))
+            if img_data:
+                audio.tags.add(APIC(encoding=3, mime='image/jpeg', type=3, desc='Cover', data=img_data))
+            if lrc_text:
+                audio.tags.add(USLT(encoding=3, lang='eng', desc='', text=lrc_text))
             audio.save()
         elif isinstance(audio, FLAC):
-            pic = Picture()
-            pic.type, pic.mime, pic.desc, pic.data = 3, "image/jpeg", "Cover", img_data
-            audio.add_picture(pic)
+            if img_data:
+                pic = Picture()
+                pic.type, pic.mime, pic.desc, pic.data = 3, "image/jpeg", "Cover", img_data
+                audio.add_picture(pic)
+            if lrc_text:
+                audio["LYRICS"] = lrc_text
             audio.save()
         elif isinstance(audio, MP4):
-            audio["covr"] = [MP4Cover(img_data, imageformat=MP4Cover.FORMAT_JPEG)]
+            if img_data:
+                audio["covr"] = [MP4Cover(img_data, imageformat=MP4Cover.FORMAT_JPEG)]
+            if lrc_text:
+                audio["\xa9lyr"] = lrc_text
             audio.save()
     except Exception:
-        pass  # If it fails, we gracefully fall back to whatever yt-dlp embedded
+        pass  # Silently degrade if metadata embedding fails
 
 def download_one(item: dict, outdir: str, idx: int, ejs: bool, progress, overall_task, audio_format: str) -> Tuple[bool, str]:
     """
@@ -90,8 +106,8 @@ def download_one(item: dict, outdir: str, idx: int, ejs: bool, progress, overall
             
             # The filepath is printed to stdout by our --print after_move:filepath flag
             filepaths = [line for line in result.stdout.strip().splitlines() if os.path.exists(line)]
-            if filepaths and cover_url:
-                embed_cover_art(filepaths[-1], cover_url)
+            if filepaths:
+                embed_metadata(filepaths[-1], cover_url, query=title)
             
             from dlmusic.dedup import record_done
             record_done(url, outdir)

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-17
+### Added
+- **Synced Lyrics Engine**: Integrated `syncedlyrics` to scrape LRCLIB for `.lrc` files in the background. Auto-embeds synchronized lyrics directly into MP3, FLAC, and M4A tags via `mutagen`.
+
+## [1.0.3] - 2026-05-17
+### Added
+- **Ecosystem Expansion**: Added native detection and support for Apple Music (`music.apple.com`) and SoundCloud playlists.
+
+## [1.0.2] - 2026-05-17
+### Added
+- **Audiophile Cover Art**: Intercepts the Spotify API to scrape exact 640x640 High-Res album artwork, embedding it natively over the standard YouTube thumbnail.
+
 ## [1.0.1] - 2026-05-17
 ### Added
 - **Smart Resume (Pre-Scan)**: Instantly skip existing tracks in the output folder using a combination of O(1) `.dlmusic_manifest` lookups and robust O(N) fuzzy-filename checking.
